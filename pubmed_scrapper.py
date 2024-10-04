@@ -26,7 +26,7 @@ class PubmedScraper:
         }
 
         try:
-            response = requests.get(self.PUBMED_SEARCH_URL, params=params)
+            response = requests.get(self.PUBMED_SEARCH_URL, params=params, timeout=10)
             response.raise_for_status()  # Raises an error for bad status codes
             pubmed_ids = response.json()["esearchresult"]["idlist"]
             logging.info(f"Successfully fetched {len(pubmed_ids)} PMIDs for {affiliation}")
@@ -44,7 +44,7 @@ class PubmedScraper:
         }
 
         try:
-            response = requests.get(self.PUBMED_FETCH_URL, params=params)
+            response = requests.get(self.PUBMED_FETCH_URL, params=params, timeout=10)
             response.raise_for_status()
             root = ET.fromstring(response.content)
             journal = root.find(".//Journal/Title").text
@@ -76,6 +76,7 @@ class PubmedScraper:
         journal, title, [valid_authors, valid_affiliations], abstract = self.get_title_and_affiliation(pmid)
         if valid_affiliations and any(affiliation.lower() in aff[0].lower() for aff in valid_affiliations):
             publication = {
+                "pmid": pmid,
                 "journal": journal,
                 "title": title,
                 "authors": valid_authors,
@@ -90,7 +91,7 @@ class PubmedScraper:
         if not publication:
             return
         print("------------------------------------------------------------")
-        print(f"Title: {publication['title']}")
+        print(f"Title: {publication['title']} | PMID: {publication['pmid']}")
         print(f"Journal: {publication['journal']}")
         for author, affiliations in zip(publication['authors'], publication['affiliations']):
             if affiliation in affiliations[0]:
