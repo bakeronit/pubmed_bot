@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "pubmed-bot"
+version = "0.0.1"
+description = "fetch the publications which the first or the last author is from a specific afflication"
+authors = ["Your Name <you@example.com>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+aiohttp = "^3.10.10"
+typer = "^0.12.5"
+requests = "^2.32.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

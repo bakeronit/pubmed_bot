@@ -1,5 +1,6 @@
 from pubmed_scrapper import PubmedScraper
 from publication_formatter import PublicationFormatter
+import time
 
 class PubmedFacade:
     def __init__(self):

@@ -2,6 +2,7 @@ import requests
 from xml.etree import ElementTree as ET
 from datetime import datetime, timedelta
 import logging
+import time
 
 logging.basicConfig(level=logging.INFO)
 
@@ -35,36 +36,45 @@ class PubmedScraper:
             logging.error(f"Failed to fetch PMIDs: {e}")
             return []
 
-    def get_title_and_affiliation(self, pmid):
+    def get_title_and_affiliation(self, pmid, max_retries=3, initial_delay=1):
         """Fetches the title and affiliations for a given PMID."""
         params = {
             "db": "pubmed",
             "id": pmid,
             "retmode": "xml"
         }
-
-        try:
-            response = requests.get(self.PUBMED_FETCH_URL, params=params, timeout=10)
-            response.raise_for_status()
-            root = ET.fromstring(response.content)
-            journal = root.find(".//Journal/Title").text
-            title = root.find(".//ArticleTitle").text
-            abstract = root.find(".//AbstractText")
-            affiliations = [aff.text for aff in root.findall(".//AffiliationInfo/Affiliation")]
-            authors = root.findall(".//Author")
-            valid_authors = []
-            valid_affiliations = []
-            for item, author in enumerate(authors):
-                if item == 0 or item == len(authors) - 1 or author.attrib.get('EqualContrib', None) == 'Y':
-                    valid_authors.append(self._get_author_name(author))
-                    # Get the affiliation for the author
-                    if author.find('AffiliationInfo') is not None:
-                        author_affiliations = [aff.text for aff in author.findall('AffiliationInfo/Affiliation')]
-                        valid_affiliations.append(author_affiliations)
-            return journal, title, [valid_authors, valid_affiliations], abstract
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Failed to fetch details for PMID {pmid}: {e}")
-            return None, None, [[],[]], None
+        delay = initial_delay
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(self.PUBMED_FETCH_URL, params=params, timeout=20)
+                response.raise_for_status()
+                root = ET.fromstring(response.content)
+                journal = root.find(".//Journal/Title").text
+                title = root.find(".//ArticleTitle").text
+                abstract = root.find(".//AbstractText")
+                affiliations = [aff.text for aff in root.findall(".//AffiliationInfo/Affiliation")]
+                authors = root.findall(".//Author")
+                valid_authors = []
+                valid_affiliations = []
+                for item, author in enumerate(authors):
+                    if item == 0 or item == len(authors) - 1 or author.attrib.get('EqualContrib', None) == 'Y':
+                        valid_authors.append(self._get_author_name(author))
+                        # Get the affiliation for the author
+                        if author.find('AffiliationInfo') is not None:
+                            author_affiliations = [aff.text for aff in author.findall('AffiliationInfo/Affiliation')]
+                            valid_affiliations.append(author_affiliations)
+                return journal, title, [valid_authors, valid_affiliations], abstract
+            except requests.exceptions.RequestException as e:
+                logging.warning(f"Failed to fetch details for PMID {pmid}: {e}")
+            except requests.exceptions.HTTPError as e:
+                logging.warning(f"Failed to fetch details for PMID {pmid}: {e}")
+            if attempt < max_retries:
+                logging.warning(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+                delay *= 2
+    
+        logging.error(f"Failed to fetch details for PMID {pmid} after {max_retries} attempts.")
+        return None, None, [[],[]], None
 
     def _get_author_name(self, author):
         last_name = author.find('LastName').text if author.find('LastName') is not None else ''
