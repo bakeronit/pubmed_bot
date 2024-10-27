@@ -4,14 +4,15 @@ from datetime import datetime, timedelta
 import logging
 import time
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
+## make logging format more readable
 
 class PubmedScraper:
     def __init__(self):
         self.PUBMED_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
         self.PUBMED_FETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
     
-    def get_pmids_by_affiliation(self, affiliation):
+    def search_pmids_by_affiliation(self, affiliation):
         """Fetches PMIDs for publications from the last week based on the given affiliation."""
         one_week_ago = (datetime.now() - timedelta(weeks=1)).strftime("%Y/%m/%d")
         today = datetime.now().strftime("%Y/%m/%d")
@@ -28,7 +29,7 @@ class PubmedScraper:
 
         try:
             response = requests.get(self.PUBMED_SEARCH_URL, params=params, timeout=10)
-            response.raise_for_status()  # Raises an error for bad status codes
+            response.raise_for_status()
             pubmed_ids = response.json()["esearchresult"]["idlist"]
             logging.info(f"Successfully fetched {len(pubmed_ids)} PMIDs for {affiliation}")
             return pubmed_ids
@@ -36,8 +37,8 @@ class PubmedScraper:
             logging.error(f"Failed to fetch PMIDs: {e}")
             return []
 
-    def get_title_and_affiliation(self, pmid, max_retries=3, initial_delay=1):
-        """Fetches the title and affiliations for a given PMID."""
+    def fetch_info_by_id(self, pmid, max_retries=3, initial_delay=1):
+        """Fetches publication details for the given PMID."""
         params = {
             "db": "pubmed",
             "id": pmid,
@@ -52,10 +53,11 @@ class PubmedScraper:
                 journal = root.find(".//Journal/Title").text
                 title = root.find(".//ArticleTitle").text
                 abstract = root.find(".//AbstractText")
+                doi = root.find(".//ArticleId[@IdType='doi']")
                 affiliations = [aff.text for aff in root.findall(".//AffiliationInfo/Affiliation")]
                 authors = root.findall(".//Author")
-                valid_authors = []
-                valid_affiliations = []
+                valid_authors = []  # Authors with EqualContrib first/last author
+                valid_affiliations = [] # Affiliations for valid authors
                 for item, author in enumerate(authors):
                     if item == 0 or item == len(authors) - 1 or author.attrib.get('EqualContrib', None) == 'Y':
                         valid_authors.append(self._get_author_name(author))
@@ -63,7 +65,7 @@ class PubmedScraper:
                         if author.find('AffiliationInfo') is not None:
                             author_affiliations = [aff.text for aff in author.findall('AffiliationInfo/Affiliation')]
                             valid_affiliations.append(author_affiliations)
-                return journal, title, [valid_authors, valid_affiliations], abstract
+                return journal, title, [valid_authors, valid_affiliations], abstract, doi
             except requests.exceptions.RequestException as e:
                 logging.warning(f"Failed to fetch details for PMID {pmid}: {e}")
             except requests.exceptions.HTTPError as e:
@@ -74,7 +76,7 @@ class PubmedScraper:
                 delay *= 2
     
         logging.error(f"Failed to fetch details for PMID {pmid} after {max_retries} attempts.")
-        return None, None, [[],[]], None
+        return None, None, [[],[]], None, None
 
     def _get_author_name(self, author):
         last_name = author.find('LastName').text if author.find('LastName') is not None else ''
@@ -83,7 +85,7 @@ class PubmedScraper:
 
     def process_publication(self, pmid, affiliation):
         """Processes publications for the given affiliation."""
-        journal, title, [valid_authors, valid_affiliations], abstract = self.get_title_and_affiliation(pmid)
+        journal, title, [valid_authors, valid_affiliations], abstract, doi = self.fetch_info_by_id(pmid)
         if valid_affiliations and any(affiliation.lower() in aff[0].lower() for aff in valid_affiliations):
             publication = {
                 "pmid": pmid,
@@ -91,7 +93,8 @@ class PubmedScraper:
                 "title": title,
                 "authors": valid_authors,
                 "affiliations": valid_affiliations,
-                "abstract": abstract.text if abstract is not None else ""
+                "abstract": abstract.text if abstract is not None else "",
+                "doi": doi.text if doi is not None else ""
             }
             return publication
         return None
@@ -103,6 +106,7 @@ class PubmedScraper:
         print("------------------------------------------------------------")
         print(f"Title: {publication['title']} | PMID: {publication['pmid']}")
         print(f"Journal: {publication['journal']}")
+        print("DOI:", publication['doi'])
         for author, affiliations in zip(publication['authors'], publication['affiliations']):
             if affiliation in affiliations[0]:
                 print(f"- {author}: {', '.join(affiliations)}")
@@ -112,7 +116,7 @@ class PubmedScraper:
 if __name__ == "__main__":
     affiliation = "QIMR Berghofer Medical Research Institute"
     pubmed_scraper = PubmedScraper()
-    pmids = pubmed_scraper.get_pmids_by_affiliation(affiliation)
+    pmids = pubmed_scraper.search_pmids_by_affiliation(affiliation)
     num_publications = 0
     for pmid in pmids:
         publication = pubmed_scraper.process_publication(pmid, affiliation)

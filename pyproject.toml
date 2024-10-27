@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "pubmed-bot"
-version = "0.0.1"
+version = "0.1.0"
 description = "fetch the publications which the first or the last author is from a specific afflication"
-authors = ["Your Name <you@example.com>"]
+authors = ["jia.zhang@qimrberghofer.edu.au"]
 license = "MIT"
 readme = "README.md"
 
@@ -11,6 +11,8 @@ python = "^3.10"
 aiohttp = "^3.10.10"
 typer = "^0.12.5"
 requests = "^2.32.3"
+python-dotenv = "^1.0.1"
+yagmail = "^0.15.293"
 
 
 [build-system]

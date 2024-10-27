@@ -3,5 +3,5 @@ class PublicationFormatter:
         title = publication['title']
         journal = publication['journal']
         authors_with_affiliations = [publication['authors'][i] for i, aff in enumerate(publication['affiliations']) if affiliation in aff[0]]
-        
-        return f"📚 {title}\n📝 Journal: {journal}\n🔬 Affiliated Authors: {', '.join(authors_with_affiliations)}"
+        doi = publication['doi']
+        return f"🔬 Affiliated Authors: {', '.join(authors_with_affiliations)}\n📚Title: {title}\n📝 Journal: {journal}\n🔗 {doi}\n"
